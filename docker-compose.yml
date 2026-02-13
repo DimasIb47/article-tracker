@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - tracker-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  bot:
+    build: ./bot
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL}
+      DISCORD_USER_ID: ${DISCORD_USER_ID}
+      SITEMAP_URL: ${SITEMAP_URL}
+      ARTICLE_VALUE_USD: ${ARTICLE_VALUE_USD}
+      DAILY_TARGET: ${DAILY_TARGET}
+      MONTHLY_TARGET: ${MONTHLY_TARGET}
+      POLL_INTERVAL: ${POLL_INTERVAL}
+      TIMEZONE: ${TIMEZONE}
+      DASHBOARD_URL: ${DASHBOARD_URL}
+    networks:
+      - tracker-net
+
+  dashboard:
+    build: ./dashboard
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      DASHBOARD_HOST: ${DASHBOARD_HOST}
+      DASHBOARD_PORT: ${DASHBOARD_PORT}
+      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
+      TIMEZONE: ${TIMEZONE}
+      ARTICLE_VALUE_USD: ${ARTICLE_VALUE_USD}
+      DAILY_TARGET: ${DAILY_TARGET}
+      MONTHLY_TARGET: ${MONTHLY_TARGET}
+    networks:
+      - tracker-net
+
+volumes:
+  pgdata:
+
+networks:
+  tracker-net:
+    driver: bridge

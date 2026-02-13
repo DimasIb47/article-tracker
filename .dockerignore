@@ -1,0 +1,24 @@
+# Secrets
+.env
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+venv/
+
+# v1 root-level files (replaced by bot/ directory)
+/bot.py
+/stats_manager.py
+/sitemap_parser.py
+/streak.py
+/progress.py
+/discord_webhook.py
+/config.json
+/requirements.txt
+/stats.json
+
+# Misc
+sample_sitemap.xml
+.git
+.gitignore

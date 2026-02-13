@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Article Tracker — Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="container">
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <h1>📊 Article Tracker</h1>
+            <span class="last-updated">Last updated: {{ now }}</span>
+        </div>
+        <div class="header-right">
+            <span class="streak-badge">🔥 {{ streak }} Day{{ 's' if streak != 1 else '' }}</span>
+        </div>
+    </header>
+
+    <!-- Earnings Cards Row -->
+    <section class="cards-row">
+        <div class="card card-accent-green">
+            <div class="card-label">Today Earned</div>
+            <div class="card-value">${{ "%.2f"|format(today_earned) }}</div>
+            <div class="card-sub">{{ today_count }} article{{ 's' if today_count != 1 else '' }}</div>
+        </div>
+        <div class="card card-accent-blue">
+            <div class="card-label">Monthly Earned</div>
+            <div class="card-value">${{ "%.2f"|format(monthly_earned) }}</div>
+            <div class="card-sub">{{ monthly_count }} / {{ monthly_target }} articles</div>
+        </div>
+        <div class="card card-accent-purple">
+            <div class="card-label">All-Time Earned</div>
+            <div class="card-value">${{ "%.2f"|format(total_earned) }}</div>
+            <div class="card-sub">{{ total_count }} articles total</div>
+        </div>
+        <div class="card card-accent-orange">
+            <div class="card-label">Per Article</div>
+            <div class="card-value">${{ "%.2f"|format(article_value) }}</div>
+            <div class="card-sub">Rate</div>
+        </div>
+    </section>
+
+    <!-- Progress Section -->
+    <section class="cards-row">
+        <div class="card card-wide">
+            <div class="card-label">📊 Daily Progress</div>
+            <div class="progress-info">
+                <span class="progress-count">{{ today_count }} / {{ daily_target }}</span>
+                <span class="progress-pct">{{ today_pct }}%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill progress-fill-green" style="width: {{ today_pct }}%"></div>
+            </div>
+            {% if daily_remaining > 0 %}
+            <div class="card-sub goal-remaining">🎯 {{ daily_remaining }} more to daily goal</div>
+            {% else %}
+            <div class="card-sub goal-done">✅ Daily goal reached!</div>
+            {% endif %}
+        </div>
+        <div class="card card-wide">
+            <div class="card-label">📈 Monthly Progress</div>
+            <div class="progress-info">
+                <span class="progress-count">{{ monthly_count }} / {{ monthly_target }}</span>
+                <span class="progress-pct">{{ monthly_pct }}%</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill progress-fill-blue" style="width: {{ monthly_pct }}%"></div>
+            </div>
+            <div class="card-sub">${{ "%.2f"|format(monthly_earned) }} earned this month</div>
+        </div>
+    </section>
+
+    <!-- Chart Section -->
+    <section class="card card-full">
+        <div class="card-label">📉 Articles Per Day (Last 30 Days)</div>
+        <div class="chart-container">
+            <canvas id="dailyChart"></canvas>
+        </div>
+    </section>
+
+    <!-- Streak Heatmap -->
+    <section class="card card-full">
+        <div class="card-label">🔥 Activity Heatmap (Last 90 Days)</div>
+        <div class="heatmap-container" id="heatmap"></div>
+        <div class="heatmap-legend">
+            <span>Less</span>
+            <span class="heatmap-cell heatmap-0"></span>
+            <span class="heatmap-cell heatmap-1"></span>
+            <span class="heatmap-cell heatmap-2"></span>
+            <span class="heatmap-cell heatmap-3"></span>
+            <span class="heatmap-cell heatmap-4"></span>
+            <span>More</span>
+        </div>
+    </section>
+
+    <!-- Recent Articles -->
+    <section class="card card-full">
+        <div class="card-label">📋 Recent Articles</div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Title</th>
+                        <th>Date</th>
+                        <th>Earned</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for article in recent_articles %}
+                    <tr>
+                        <td class="td-num">{{ loop.index }}</td>
+                        <td>
+                            <a href="{{ article.url }}" target="_blank" class="article-link">
+                                {{ article.title }}
+                            </a>
+                        </td>
+                        <td class="td-date">
+                            {% if article.detected_at %}
+                                {{ article.detected_at.strftime('%b %d, %H:%M') }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td class="td-earned">${{ "%.2f"|format(article.earning) }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if not recent_articles %}
+                    <tr>
+                        <td colspan="4" class="empty-state">No articles yet. Start writing! ✍️</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+</div>
+
+<script>
+// ─── Daily Chart ─────────────────────────────────────────────────
+const ctx = document.getElementById('dailyChart').getContext('2d');
+new Chart(ctx, {
+    type: 'bar',
+    data: {
+        labels: {{ chart_labels | tojson }},
+        datasets: [{
+            label: 'Articles',
+            data: {{ chart_values | tojson }},
+            backgroundColor: 'rgba(0, 209, 102, 0.6)',
+            borderColor: 'rgba(0, 209, 102, 1)',
+            borderWidth: 1,
+            borderRadius: 4,
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    stepSize: 1,
+                    color: '#888',
+                },
+                grid: { color: 'rgba(255,255,255,0.06)' },
+            },
+            x: {
+                ticks: { color: '#888', maxRotation: 45 },
+                grid: { display: false },
+            }
+        }
+    }
+});
+
+// ─── Heatmap ─────────────────────────────────────────────────────
+const heatmapData = {{ heatmap_data | tojson }};
+const heatmapContainer = document.getElementById('heatmap');
+
+// Generate last 90 days
+const today = new Date();
+const cells = [];
+
+for (let i = 89; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().split('T')[0];
+    const count = heatmapData[key] || 0;
+
+    const cell = document.createElement('div');
+    cell.className = 'heatmap-cell';
+    cell.title = `${key}: ${count} article${count !== 1 ? 's' : ''}`;
+
+    if (count === 0) cell.classList.add('heatmap-0');
+    else if (count <= 2) cell.classList.add('heatmap-1');
+    else if (count <= 4) cell.classList.add('heatmap-2');
+    else if (count <= 6) cell.classList.add('heatmap-3');
+    else cell.classList.add('heatmap-4');
+
+    heatmapContainer.appendChild(cell);
+}
+</script>
+
+</body>
+</html>
