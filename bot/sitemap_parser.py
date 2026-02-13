@@ -5,6 +5,7 @@ Fetches the news-sitemap.xml and extracts article URLs, titles, and dates.
 """
 
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
@@ -20,7 +21,9 @@ NAMESPACES = {
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                  "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Cache-Control": "no-cache, no-store, must-revalidate",
+    "Pragma": "no-cache",
 }
 
 REQUEST_TIMEOUT = 30
@@ -35,8 +38,11 @@ class Article:
 
 
 def fetch_sitemap(sitemap_url: str) -> Optional[bytes]:
+    # Add timestamp to bust CDN cache (WordPress W3 Total Cache caches for 24h)
+    cache_buster = f"{'&' if '?' in sitemap_url else '?'}_cb={int(time.time())}"
+    url = sitemap_url + cache_buster
     try:
-        response = requests.get(sitemap_url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
+        response = requests.get(url, headers=HEADERS, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         logger.debug(f"Sitemap fetched: {len(response.content)} bytes")
         return response.content
