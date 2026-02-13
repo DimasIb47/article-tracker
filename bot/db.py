@@ -118,6 +118,19 @@ def get_today_count(tz) -> int:
         conn.close()
 
 
+def get_today_earned(tz) -> float:
+    """Get total earnings for today."""
+    today = datetime.now(tz).date()
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT earned FROM daily_stats WHERE date = %s", (today,))
+            row = cur.fetchone()
+            return float(row[0]) if row else 0.0
+    finally:
+        conn.close()
+
+
 def get_monthly_count(tz) -> int:
     """Get total article count for the current month."""
     now = datetime.now(tz)

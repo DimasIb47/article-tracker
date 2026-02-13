@@ -53,7 +53,8 @@ def send_article_notification(
     monthly_count: int,
     monthly_target: int,
     streak: int,
-    total_earned: float,
+    today_earned: float,
+    monthly_earned: float,
     user_id: str = "",
     dashboard_url: str = "",
 ):
@@ -61,8 +62,6 @@ def send_article_notification(
     daily_remaining = calculate_daily_remaining(today_count, daily_target)
     daily_bar = make_progress_bar(today_count, daily_target)
     monthly_bar = make_progress_bar(monthly_count, monthly_target)
-    earning_str = format_earning_increment(article_value)
-    total_str = format_total_earned(total_earned)
     mention = _mention(user_id)
 
     if daily_remaining > 0:
@@ -71,8 +70,10 @@ def send_article_notification(
         goal_line = "🎯  ✅ Daily Goal Reached!"
 
     message = (
-        f"💸  **{earning_str}**\n"
-        f"💰  Total This Month: **{total_str}**\n"
+        f"📊  **Today: {today_count} / {daily_target} Articles**\n"
+        f"💸  + ${article_value:,.2f} (this article)\n"
+        f"💰  Earned Today: **${today_earned:,.2f}**\n"
+        f"💵  Earned This Month: **${monthly_earned:,.2f}**\n"
         f"\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
@@ -82,13 +83,9 @@ def send_article_notification(
         f"\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"\n"
-        f"📊  **Today**\n"
         f"`{daily_bar}`\n"
-        f"**{today_count} / {daily_target}** Articles\n"
-        f"\n"
-        f"🔥  **Streak: {streak} Day{'s' if streak != 1 else ''}**\n"
-        f"\n"
         f"{goal_line}\n"
+        f"🔥  Streak: **{streak} Day{'s' if streak != 1 else ''}**\n"
         f"\n"
         f"📈  **Monthly Progress**\n"
         f"`{monthly_bar}`\n"

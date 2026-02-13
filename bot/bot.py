@@ -130,6 +130,7 @@ def poll_cycle(config: dict, tz) -> int:
 
         # Get updated counts
         today_count = db.get_today_count(tz)
+        today_earned = db.get_today_earned(tz)
         monthly_count = db.get_monthly_count(tz)
         monthly_earned = db.get_monthly_earned(tz)
 
@@ -144,7 +145,8 @@ def poll_cycle(config: dict, tz) -> int:
             monthly_count=monthly_count,
             monthly_target=config["monthly_target"],
             streak=streak,
-            total_earned=monthly_earned,
+            today_earned=today_earned,
+            monthly_earned=monthly_earned,
             user_id=config["discord_user_id"],
             dashboard_url=config["dashboard_url"],
         )
