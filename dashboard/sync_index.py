@@ -59,8 +59,17 @@ def fetch_all_articles() -> list[dict]:
                 if not any(cat in loc for cat in ALLOWED_CATEGORIES):
                     continue
                     
-                title_raw = post.get("title", {}).get("rendered", "")
+                # Try Yoast title first, then native post title
+                yoast_title = post.get("yoast_head_json", {}).get("title", "")
+                native_title = post.get("title", {}).get("rendered", "")
+                
+                title_raw = yoast_title if yoast_title else native_title
                 title = html.unescape(title_raw).strip()
+                
+                # Remove typical " - Shane The Gamer" suffix from Yoast titles
+                if " - Shane" in title:
+                    title = title.split(" - Shane")[0].strip()
+                    
                 lastmod = post.get("modified", "")
                 category = _detect_category(loc)
                 
