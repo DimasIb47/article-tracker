@@ -7,7 +7,6 @@ articles from August 2025 onwards, and upserts into the article_index table.
 
 import logging
 from datetime import datetime
-import psycopg2
 import requests
 
 logger = logging.getLogger(__name__)
