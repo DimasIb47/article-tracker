@@ -9,7 +9,6 @@ import logging
 import xml.etree.ElementTree as ET
 from datetime import datetime
 
-import psycopg2
 import requests
 
 logger = logging.getLogger(__name__)
@@ -35,6 +34,7 @@ HEADERS = {
 
 CUTOFF = datetime(2025, 8, 1)
 NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
+IMAGE_NS = "{http://www.google.com/schemas/sitemap-image/1.1}"
 ALLOWED_CATEGORIES = ("/esports-news/", "/video-gaming/")
 
 
@@ -92,7 +92,17 @@ def fetch_all_articles() -> list[dict]:
                     except (ValueError, IndexError):
                         pass
 
-                title = _title_from_slug(loc)
+                # Extract actual title from <image:title> if available
+                title = None
+                img_el = u.find(f"{IMAGE_NS}image")
+                if img_el is not None:
+                    title_el = img_el.find(f"{IMAGE_NS}title")
+                    if title_el is not None and title_el.text:
+                        title = title_el.text.strip()
+
+                if not title:
+                    title = _title_from_slug(loc)
+
                 category = _detect_category(loc)
 
                 all_articles.append({
@@ -121,6 +131,8 @@ def fetch_all_articles() -> list[dict]:
 
 def sync_to_db(database_url: str) -> int:
     """Fetch articles from sitemap and upsert into article_index table."""
+    import psycopg2
+    
     articles = fetch_all_articles()
     if not articles:
         logger.warning("No articles fetched from sitemap.")
