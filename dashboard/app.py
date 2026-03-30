@@ -156,7 +156,7 @@ async def dashboard(request: Request, key: str = Query(default="")):
     monthly_pct = min(100, int((monthly_count / MONTHLY_TARGET) * 100)) if MONTHLY_TARGET > 0 else 0
     daily_remaining = max(0, DAILY_TARGET - today_count)
 
-    return templates.TemplateResponse("index.html", {
+    return templates.TemplateResponse(request=request, name="index.html", context={
         "request": request,
         "key": key,
         "now": now.strftime("%Y-%m-%d %H:%M %Z"),
