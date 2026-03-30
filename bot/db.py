@@ -36,6 +36,15 @@ CREATE TABLE IF NOT EXISTS streak_info (
     last_publish_date DATE
 );
 
+CREATE TABLE IF NOT EXISTS article_index (
+    id SERIAL PRIMARY KEY,
+    url TEXT UNIQUE NOT NULL,
+    title TEXT NOT NULL,
+    category TEXT DEFAULT '',
+    lastmod TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Ensure streak_info has exactly one row
 INSERT INTO streak_info (id, current_streak, last_publish_date)
 VALUES (1, 0, NULL)

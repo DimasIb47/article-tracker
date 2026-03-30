@@ -5,7 +5,10 @@ Serves a web dashboard showing earnings, streaks, progress, and article history.
 Protected with a simple password query param.
 """
 
+import logging
 import os
+import threading
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -18,7 +21,34 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-app = FastAPI(title="Article Tracker Dashboard")
+from search_engine import search_engine
+from sync_index import sync_to_db
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup: sync article index and build search index."""
+    logger.info("Starting article index sync...")
+    try:
+        # Run sync in background thread to not block startup
+        def _sync():
+            try:
+                count = sync_to_db(DATABASE_URL)
+                logger.info(f"Synced {count} articles")
+                n = search_engine.build_index(DATABASE_URL)
+                logger.info(f"Search index built: {n} articles")
+            except Exception as e:
+                logger.error(f"Startup sync failed: {e}")
+        t = threading.Thread(target=_sync, daemon=True)
+        t.start()
+    except Exception as e:
+        logger.error(f"Startup error: {e}")
+    yield
+
+
+app = FastAPI(title="Article Tracker Dashboard", lifespan=lifespan)
 
 # Static files & templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -201,7 +231,40 @@ async def api_stats(key: str = Query(default="")):
     }
 
 
+@app.get("/api/search")
+async def api_search(q: str = Query(default=""), key: str = Query(default=""), top_k: int = Query(default=8)):
+    """Search for related articles by title similarity."""
+    if not check_auth(key):
+        return JSONResponse(status_code=403, content={"error": "unauthorized"})
+
+    if not q.strip():
+        return {"results": [], "query": "", "index_size": search_engine.article_count}
+
+    results = search_engine.search(q.strip(), top_k=min(top_k, 20))
+    return {
+        "results": results,
+        "query": q.strip(),
+        "index_size": search_engine.article_count,
+    }
+
+
+@app.post("/api/sync-index")
+async def api_sync_index(key: str = Query(default="")):
+    """Re-sync article index from sitemap and rebuild search index."""
+    if not check_auth(key):
+        return JSONResponse(status_code=403, content={"error": "unauthorized"})
+
+    try:
+        count = sync_to_db(DATABASE_URL)
+        n = search_engine.build_index(DATABASE_URL)
+        return {"synced": count, "indexed": n, "status": "ok"}
+    except Exception as e:
+        logger.error(f"Sync failed: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     host = os.environ.get("DASHBOARD_HOST", "0.0.0.0")
     port = int(os.environ.get("DASHBOARD_PORT", "8080"))
     uvicorn.run(app, host=host, port=port, log_level="info")

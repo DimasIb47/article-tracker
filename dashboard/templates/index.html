@@ -24,6 +24,21 @@
         </div>
     </header>
 
+    <!-- Internal Backlink Search -->
+    <section class="card card-full search-section" id="search-section">
+        <div class="search-header">
+            <div class="card-label">🔗 Internal Backlink Finder</div>
+            <button class="btn-sync" id="btn-sync" title="Re-sync article index from sitemap">⟳ Sync</button>
+        </div>
+        <div class="search-bar-container">
+            <input type="text" id="search-input" class="search-input"
+                   placeholder="Paste article title here... (e.g. Steam Pricing Update Adds New Regional Tools)"
+                   autocomplete="off">
+            <span class="search-meta" id="search-meta"></span>
+        </div>
+        <div class="search-results" id="search-results"></div>
+    </section>
+
     <!-- Earnings Cards Row -->
     <section class="cards-row">
         <div class="card card-accent-green">
@@ -210,6 +225,100 @@ for (let i = 89; i >= 0; i--) {
 
     heatmapContainer.appendChild(cell);
 }
+
+// ─── Internal Backlink Search ───────────────────────────────────
+const DASH_KEY = '{{ key }}';
+const searchInput = document.getElementById('search-input');
+const searchResults = document.getElementById('search-results');
+const searchMeta = document.getElementById('search-meta');
+const btnSync = document.getElementById('btn-sync');
+
+let searchTimeout = null;
+
+searchInput.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const q = this.value.trim();
+    if (!q) {
+        searchResults.innerHTML = '';
+        searchMeta.textContent = '';
+        return;
+    }
+    searchMeta.textContent = 'Searching...';
+    searchTimeout = setTimeout(() => doSearch(q), 300);
+});
+
+// Ctrl+K to focus search
+document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInput.focus();
+        searchInput.select();
+    }
+});
+
+async function doSearch(query) {
+    try {
+        const resp = await fetch(`/api/search?q=${encodeURIComponent(query)}&key=${DASH_KEY}&top_k=8`);
+        const data = await resp.json();
+
+        if (!data.results || data.results.length === 0) {
+            searchResults.innerHTML = '<div class="search-empty">No matching articles found.</div>';
+            searchMeta.textContent = `0 results from ${data.index_size || 0} articles`;
+            return;
+        }
+
+        searchMeta.textContent = `${data.results.length} results from ${data.index_size} articles`;
+
+        let html = '';
+        data.results.forEach((r, i) => {
+            const scoreClass = r.score >= 50 ? 'score-high' : r.score >= 20 ? 'score-mid' : 'score-low';
+            const dateStr = r.lastmod ? new Date(r.lastmod).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}) : '';
+            html += `
+                <div class="search-result-card">
+                    <div class="result-top">
+                        <span class="result-rank">#${i + 1}</span>
+                        <span class="result-score ${scoreClass}">${r.score}% match</span>
+                        <span class="result-category">${r.category}</span>
+                        ${dateStr ? `<span class="result-date">${dateStr}</span>` : ''}
+                    </div>
+                    <div class="result-title">
+                        <a href="${r.url}" target="_blank">${r.title}</a>
+                    </div>
+                    <div class="result-url-row">
+                        <span class="result-url">${r.url}</span>
+                        <button class="btn-copy" onclick="copyUrl(this, '${r.url}')" title="Copy URL">📋</button>
+                    </div>
+                </div>
+            `;
+        });
+        searchResults.innerHTML = html;
+    } catch (err) {
+        searchResults.innerHTML = '<div class="search-empty">Search failed. Try again.</div>';
+        searchMeta.textContent = 'Error';
+    }
+}
+
+function copyUrl(btn, url) {
+    navigator.clipboard.writeText(url).then(() => {
+        btn.textContent = '✅';
+        setTimeout(() => btn.textContent = '📋', 1500);
+    });
+}
+
+// Sync button
+btnSync.addEventListener('click', async function() {
+    this.disabled = true;
+    this.textContent = '⟳ Syncing...';
+    try {
+        const resp = await fetch(`/api/sync-index?key=${DASH_KEY}`, { method: 'POST' });
+        const data = await resp.json();
+        this.textContent = `✅ ${data.indexed} articles`;
+        setTimeout(() => { this.textContent = '⟳ Sync'; this.disabled = false; }, 3000);
+    } catch (err) {
+        this.textContent = '❌ Failed';
+        setTimeout(() => { this.textContent = '⟳ Sync'; this.disabled = false; }, 3000);
+    }
+});
 </script>
 
 </body>
