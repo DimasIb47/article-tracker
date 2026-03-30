@@ -6,43 +6,20 @@ articles from August 2025 onwards, and upserts into the article_index table.
 """
 
 import logging
-import xml.etree.ElementTree as ET
 from datetime import datetime
-
+import psycopg2
 import requests
 
 logger = logging.getLogger(__name__)
 
-SITEMAP_PAGES = [
-    "https://www.shanethegamer.com/post-sitemap.xml",
-    "https://www.shanethegamer.com/post-sitemap2.xml",
-    "https://www.shanethegamer.com/post-sitemap3.xml",
-    "https://www.shanethegamer.com/post-sitemap4.xml",
-    "https://www.shanethegamer.com/post-sitemap5.xml",
-    "https://www.shanethegamer.com/post-sitemap6.xml",
-    "https://www.shanethegamer.com/post-sitemap7.xml",
-    "https://www.shanethegamer.com/post-sitemap8.xml",
-    "https://www.shanethegamer.com/post-sitemap9.xml",
-    "https://www.shanethegamer.com/post-sitemap10.xml",
-]
-
+WP_API_URL = "https://www.shanethegamer.com/wp-json/wp/v2/posts"
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                  "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Cache-Control": "no-cache",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Cache-Control": "no-cache"
 }
 
-CUTOFF = datetime(2025, 8, 1)
-NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
-IMAGE_NS = "{http://www.google.com/schemas/sitemap-image/1.1}"
+CUTOFF = "2025-08-01T00:00:00"
 ALLOWED_CATEGORIES = ("/esports-news/", "/video-gaming/")
-
-
-def _title_from_slug(url: str) -> str:
-    """Extract a human-readable title from a URL slug."""
-    slug = url.rstrip("/").split("/")[-1]
-    return slug.replace("-", " ").title()
-
 
 def _detect_category(url: str) -> str:
     """Detect article category from URL path."""
@@ -51,91 +28,73 @@ def _detect_category(url: str) -> str:
             return cat.strip("/")
     return ""
 
-
 def fetch_all_articles() -> list[dict]:
-    """Fetch all matching articles from all sitemap pages."""
+    """Fetch all matching articles from the WordPress REST API."""
+    import html
     all_articles = []
-
-    for sitemap_url in SITEMAP_PAGES:
+    page = 1
+    
+    while True:
         try:
-            resp = requests.get(sitemap_url, headers=HEADERS, timeout=30)
-            if resp.status_code == 404:
-                logger.debug(f"{sitemap_url}: 404, stopping")
+            params = {
+                "per_page": 100,
+                "page": page,
+                "after": CUTOFF,
+                "_fields": "id,link,title,modified"
+            }
+            resp = requests.get(WP_API_URL, headers=HEADERS, params=params, timeout=30)
+            
+            if resp.status_code == 400:  # End of pagination usually throws 400 in WP
                 break
             resp.raise_for_status()
-
-            root = ET.fromstring(resp.content)
-            urls = root.findall(f"{NS}url")
-
+            
+            posts = resp.json()
+            if not posts:
+                break
+                
             count = 0
-            for u in urls:
-                loc_el = u.find(f"{NS}loc")
-                lastmod_el = u.find(f"{NS}lastmod")
-                if loc_el is None:
-                    continue
-
-                loc = loc_el.text.strip()
-
-                # Filter by category
+            for post in posts:
+                loc = post.get("link", "")
+                
+                # Filter by category matching the slug structure
                 if not any(cat in loc for cat in ALLOWED_CATEGORIES):
                     continue
-
-                # Filter by date
-                lastmod_str = ""
-                if lastmod_el is not None and lastmod_el.text:
-                    lastmod_str = lastmod_el.text.strip()
-                    try:
-                        dt_str = lastmod_str.split("T")[0]
-                        dt = datetime.strptime(dt_str, "%Y-%m-%d")
-                        if dt < CUTOFF:
-                            continue
-                    except (ValueError, IndexError):
-                        pass
-
-                # Extract actual title from <image:title> if available
-                title = None
-                img_el = u.find(f"{IMAGE_NS}image")
-                if img_el is not None:
-                    title_el = img_el.find(f"{IMAGE_NS}title")
-                    if title_el is not None and title_el.text:
-                        title = title_el.text.strip()
-
-                if not title:
-                    title = _title_from_slug(loc)
-
+                    
+                title_raw = post.get("title", {}).get("rendered", "")
+                title = html.unescape(title_raw).strip()
+                lastmod = post.get("modified", "")
                 category = _detect_category(loc)
-
+                
                 all_articles.append({
                     "url": loc,
                     "title": title,
                     "category": category,
-                    "lastmod": lastmod_str or None,
+                    "lastmod": lastmod or None,
                 })
                 count += 1
-
-            logger.info(f"{sitemap_url}: {count} matching articles (total: {len(urls)} URLs)")
-
+                
+            logger.info(f"WP Page {page}: {count} matching articles (total: {len(posts)} posts)")
+            page += 1
+            
         except requests.HTTPError as e:
-            if e.response and e.response.status_code == 404:
-                logger.debug(f"{sitemap_url}: 404, stopping")
+            if e.response and e.response.status_code in (400, 404):
                 break
-            logger.error(f"{sitemap_url}: HTTP error {e}")
+            logger.error(f"WP API HTTP error on page {page}: {e}")
             break
         except Exception as e:
-            logger.error(f"{sitemap_url}: error {e}")
+            logger.error(f"WP API error on page {page}: {e}")
             break
 
-    logger.info(f"Total matching articles from sitemap: {len(all_articles)}")
+    logger.info(f"Total matching articles from WP API: {len(all_articles)}")
     return all_articles
 
-
 def sync_to_db(database_url: str) -> int:
-    """Fetch articles from sitemap and upsert into article_index table."""
+    """Fetch articles from WordPress API and upsert into article_index table."""
     import psycopg2
     
     articles = fetch_all_articles()
     if not articles:
-        logger.warning("No articles fetched from sitemap.")
+        logger.warning("No articles fetched from WP API.")
         return 0
 
     conn = psycopg2.connect(database_url)
