@@ -151,6 +151,21 @@ def poll_cycle(config: dict, tz) -> int:
             dashboard_url=config["dashboard_url"],
         )
 
+        # Trigger dashboard article index sync
+        if config.get("dashboard_url"):
+            try:
+                import urllib.parse
+                import requests
+                url_parts = urllib.parse.urlparse(config["dashboard_url"])
+                sync_url = f"{url_parts.scheme}://dashboard:8080/api/sync-index"
+                if url_parts.query:
+                    sync_url += f"?{url_parts.query}"
+                # Use internal 'dashboard:8080' to bypass external network if possible
+                requests.post(sync_url, timeout=30)
+                logger.info("Triggered dashboard index sync")
+            except Exception as e:
+                logger.error(f"Failed to trigger dashboard sync: {e}")
+
         new_count += 1
         if new_count > 1:
             time.sleep(1)
