@@ -39,7 +39,7 @@ def fetch_all_articles() -> list[dict]:
                 "per_page": 100,
                 "page": page,
                 "after": CUTOFF,
-                "_fields": "id,link,title,modified"
+                "_fields": "id,link,title,modified,yoast_head_json"
             }
             resp = requests.get(WP_API_URL, headers=HEADERS, params=params, timeout=30)
             
