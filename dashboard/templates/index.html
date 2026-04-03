@@ -342,15 +342,35 @@ function renderResults() {
 }
 
 function copyText(btn, text) {
-    navigator.clipboard.writeText(text).then(() => {
-        const originalText = btn.textContent;
-        btn.textContent = 'Copied!';
-        btn.classList.add('btn-copied');
-        setTimeout(() => {
-            btn.textContent = originalText;
-            btn.classList.remove('btn-copied');
-        }, 1500);
-    });
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => showCopied(btn));
+    } else {
+        // Fallback for non-HTTPS (like http://187.77... IPs)
+        let textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "absolute";
+        textArea.style.left = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            showCopied(btn);
+        } catch (err) {
+            console.error('Fallback copy failed', err);
+        }
+        document.body.removeChild(textArea);
+    }
+}
+
+function showCopied(btn) {
+    const originalText = btn.textContent;
+    btn.textContent = 'Copied!';
+    btn.classList.add('btn-copied');
+    setTimeout(() => {
+        btn.textContent = originalText;
+        btn.classList.remove('btn-copied');
+    }, 1500);
 }
 
 // Sync button
