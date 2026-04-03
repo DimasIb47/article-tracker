@@ -529,12 +529,13 @@ tr:hover td {
 }
 
 .btn-copy {
-    background: none;
+    background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: 4px;
-    padding: 2px 8px;
+    padding: 4px 12px;
     cursor: pointer;
     font-size: 0.8rem;
+    font-weight: 500;
     transition: all 0.2s;
     color: var(--text-secondary);
 }
@@ -542,6 +543,53 @@ tr:hover td {
 .btn-copy:hover {
     background: var(--bg-card-hover);
     border-color: var(--accent-blue);
+    color: var(--text-primary);
+}
+
+.btn-copied {
+    background: var(--accent-green) !important;
+    border-color: var(--accent-green) !important;
+    color: white !important;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.search-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+}
+
+.search-sort {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.btn-sort {
+    background: var(--bg-main);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-sort:hover {
+    background: var(--bg-card-hover);
+    color: var(--text-primary);
+}
+
+.btn-sort.active {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: white;
 }
 
 .search-empty {

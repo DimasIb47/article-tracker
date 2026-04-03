@@ -34,7 +34,14 @@
             <input type="text" id="search-input" class="search-input"
                    placeholder="Paste article title here... (e.g. Steam Pricing Update Adds New Regional Tools)"
                    autocomplete="off">
-            <span class="search-meta" id="search-meta"></span>
+            <div class="search-controls">
+                <span class="search-meta" id="search-meta"></span>
+                <div class="search-sort" id="search-sort" style="display: none;">
+                    <span style="color: var(--text-muted); font-size: 0.8rem;">Sort by:</span>
+                    <button class="btn-sort active" id="sort-relevancy" onclick="setSort('relevancy')">Relevancy</button>
+                    <button class="btn-sort" id="sort-date" onclick="setSort('date')">Date</button>
+                </div>
+            </div>
         </div>
         <div class="search-results" id="search-results"></div>
     </section>
@@ -233,7 +240,11 @@ const searchResults = document.getElementById('search-results');
 const searchMeta = document.getElementById('search-meta');
 const btnSync = document.getElementById('btn-sync');
 
+const searchSort = document.getElementById('search-sort');
+
 let searchTimeout = null;
+let currentResults = [];
+let currentSort = 'relevancy'; // 'relevancy' or 'date'
 
 searchInput.addEventListener('input', function() {
     clearTimeout(searchTimeout);
@@ -241,6 +252,7 @@ searchInput.addEventListener('input', function() {
     if (!q) {
         searchResults.innerHTML = '';
         searchMeta.textContent = '';
+        searchSort.style.display = 'none';
         return;
     }
     searchMeta.textContent = 'Searching...';
@@ -264,44 +276,80 @@ async function doSearch(query) {
         if (!data.results || data.results.length === 0) {
             searchResults.innerHTML = '<div class="search-empty">No matching articles found.</div>';
             searchMeta.textContent = `0 results from ${data.index_size || 0} articles`;
+            searchSort.style.display = 'none';
             return;
         }
 
         searchMeta.textContent = `${data.results.length} results from ${data.index_size} articles`;
-
-        let html = '';
-        data.results.forEach((r, i) => {
-            const scoreClass = r.score >= 50 ? 'score-high' : r.score >= 20 ? 'score-mid' : 'score-low';
-            const dateStr = r.lastmod ? new Date(r.lastmod).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}) : '';
-            html += `
-                <div class="search-result-card">
-                    <div class="result-top">
-                        <span class="result-rank">#${i + 1}</span>
-                        <span class="result-score ${scoreClass}">${r.score}% match</span>
-                        <span class="result-category">${r.category}</span>
-                        ${dateStr ? `<span class="result-date">${dateStr}</span>` : ''}
-                    </div>
-                    <div class="result-title">
-                        <a href="${r.url}" target="_blank">${r.title}</a>
-                    </div>
-                    <div class="result-url-row">
-                        <span class="result-url">${r.url}</span>
-                        <button class="btn-copy" onclick="copyUrl(this, '${r.url}')" title="Copy URL">📋</button>
-                    </div>
-                </div>
-            `;
-        });
-        searchResults.innerHTML = html;
+        searchSort.style.display = 'flex';
+        
+        currentResults = data.results;
+        renderResults();
     } catch (err) {
         searchResults.innerHTML = '<div class="search-empty">Search failed. Try again.</div>';
         searchMeta.textContent = 'Error';
+        searchSort.style.display = 'none';
     }
 }
 
-function copyUrl(btn, url) {
-    navigator.clipboard.writeText(url).then(() => {
-        btn.textContent = '✅';
-        setTimeout(() => btn.textContent = '📋', 1500);
+function setSort(type) {
+    currentSort = type;
+    document.getElementById('sort-relevancy').classList.toggle('active', type === 'relevancy');
+    document.getElementById('sort-date').classList.toggle('active', type === 'date');
+    renderResults();
+}
+
+function renderResults() {
+    let results = [...currentResults];
+    
+    if (currentSort === 'date') {
+        results.sort((a, b) => {
+            const dateA = a.lastmod ? new Date(a.lastmod).getTime() : 0;
+            const dateB = b.lastmod ? new Date(b.lastmod).getTime() : 0;
+            return dateB - dateA; // Newest first
+        });
+    }
+
+    let html = '';
+    results.forEach((r, i) => {
+        const scoreClass = r.score >= 50 ? 'score-high' : r.score >= 20 ? 'score-mid' : 'score-low';
+        const dateStr = r.lastmod ? new Date(r.lastmod).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}) : '';
+        // Escape quotes in title
+        const safeTitle = r.title.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        
+        html += `
+            <div class="search-result-card">
+                <div class="result-top">
+                    <span class="result-rank">#${i + 1}</span>
+                    <span class="result-score ${scoreClass}">${r.score}% match</span>
+                    <span class="result-category">${r.category}</span>
+                    ${dateStr ? `<span class="result-date">${dateStr}</span>` : ''}
+                </div>
+                <div class="result-title">
+                    <a href="${r.url}" target="_blank">${r.title}</a>
+                </div>
+                <div class="result-url-row">
+                    <span class="result-url">${r.url}</span>
+                    <div class="action-buttons">
+                        <button class="btn-copy" onclick="copyText(this, '${safeTitle}')" title="Copy Title">Copy Title</button>
+                        <button class="btn-copy" onclick="copyText(this, '${r.url}')" title="Copy URL">Copy URL</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    searchResults.innerHTML = html;
+}
+
+function copyText(btn, text) {
+    navigator.clipboard.writeText(text).then(() => {
+        const originalText = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.classList.add('btn-copied');
+        setTimeout(() => {
+            btn.textContent = originalText;
+            btn.classList.remove('btn-copied');
+        }, 1500);
     });
 }
 

@@ -34,13 +34,17 @@ async def lifespan(app: FastAPI):
     try:
         # Run sync in background thread to not block startup
         def _sync():
-            try:
-                count = sync_to_db(DATABASE_URL)
-                logger.info(f"Synced {count} articles")
-                n = search_engine.build_index(DATABASE_URL)
-                logger.info(f"Search index built: {n} articles")
-            except Exception as e:
-                logger.error(f"Startup sync failed: {e}")
+            import time
+            while True:
+                try:
+                    count = sync_to_db(DATABASE_URL)
+                    logger.info(f"Synced {count} articles")
+                    n = search_engine.build_index(DATABASE_URL)
+                    logger.info(f"Search index built: {n} articles")
+                except Exception as e:
+                    logger.error(f"Background daily sync failed: {e}")
+                time.sleep(86400)  # Next sync in 24 hours
+        
         t = threading.Thread(target=_sync, daemon=True)
         t.start()
     except Exception as e:
